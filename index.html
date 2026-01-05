@@ -11,13 +11,12 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #fcf8f9; color: #4a3a3e; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; color: #1e293b; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .pink-gradient { background: linear-gradient(135deg, #f87171 0%, #fb923c 100%); }
-        .card-shadow { box-shadow: 0 10px 30px -5px rgba(248, 113, 113, 0.1); }
-        .toast-enter { animation: slideUp 0.3s ease-out; }
-        @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        .blue-gradient { background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%); }
+        .card-shadow { box-shadow: 0 10px 30px -5px rgba(59, 130, 246, 0.1); }
         table { border-collapse: separate; border-spacing: 0; }
+        th, td { border: 1px solid #e2e8f0; }
     </style>
 </head>
 <body>
@@ -25,118 +24,144 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, doc, onSnapshot, addDoc, setDoc, serverTimestamp, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, addDoc, deleteDoc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBlo6fIFqmEMyK3YTGBRg1S9Lw3OcZdczU",
-            authDomain: "test-fee8d.firebaseapp.com",
-            projectId: "test-fee8d",
-            storageBucket: "test-fee8d.firebasestorage.app",
-            messagingSenderId: "415299571304",
-            appId: "1:415299571304:web:07dff250c930d4f99035dd",
-            measurementId: "G-TXQ7NZ8LPT"
-        };
-
+        const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        window.firebaseEnv = { auth, db, appId: 'class-assignment-portal-v2', signInAnonymously, onAuthStateChanged, collection, onSnapshot, addDoc, setDoc, serverTimestamp, deleteDoc, doc, query, orderBy };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'class-portal-v4-blue';
+
+        // 封裝成全局物件供 React 使用，確保路徑正確
+        window.firebaseEnv = {
+            auth, db, appId,
+            signInAnonymously, onAuthStateChanged, signInWithCustomToken,
+            collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp,
+            query, orderBy
+        };
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect } = React;
         const STUDENT_LIST = { "早班": ["澄貞", "賴憲", "珮綾", "若蕎", "怡文", "雅婷", "靖崴", "Emily", "Lu", "江江", "Gina"], "晚班": ["阿文", "阿廼", "英愉", "謝慈", "佩錡", "辰芮", "劉昊", "秝桀", "涵傑", "99", "若若", "凱陞", "玟淯", "靜靜"] };
-        const SEMESTER_WEEKS = [
-            { date: "1/4" }, { date: "1/11" }, { date: "1/18" }, { date: "1/25" },
-            { date: "2/1" }, { date: "2/8" }, { date: "2/15" }, { date: "2/22" },
-            { date: "3/1" }, { date: "3/8" }, { date: "3/15" }, { date: "3/22" }
-        ];
-        
+        const SEMESTER_WEEKS = ["1/4", "1/11", "1/18", "1/25", "2/1", "2/8", "2/15", "2/22", "3/1", "3/8", "3/15", "3/22"].map(d => ({ date: d }));
+       
         const Icon = ({ name, size = 20, className = "" }) => {
             useEffect(() => { if (window.lucide) lucide.createIcons(); }, [name, size]);
             return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
         };
 
-        const Toast = ({ message, type, onClose }) => {
-            useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, []);
-            return (
-                <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-white font-black toast-enter ${type === 'success' ? 'bg-rose-500' : 'bg-slate-800'}`}>
-                    <Icon name={type === 'success' ? 'check-circle' : 'alert-circle'} size={20} />
-                    <span>{message}</span>
-                </div>
-            );
-        };
-
         function App() {
             const [user, setUser] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [toast, setToast] = useState(null);
             const [identity, setIdentity] = useState(JSON.parse(localStorage.getItem('portal_identity')));
             const [tempClass, setTempClass] = useState("");
             const [tempName, setTempName] = useState("");
             const [currentView, setCurrentView] = useState('upload');
-            const [selectedPeerDate, setSelectedPeerDate] = useState(SEMESTER_WEEKS[0].date);
+            const [selectedPeerDate, setSelectedPeerDate] = useState("1/4");
             const [assignments, setAssignments] = useState([]);
             const [comments, setComments] = useState([]);
 
             useEffect(() => {
-                const interval = setInterval(() => {
-                    const env = window.firebaseEnv;
-                    if (env) {
-                        env.signInAnonymously(env.auth);
-                        env.onAuthStateChanged(env.auth, (u) => {
-                            setUser(u);
-                            setLoading(false);
-                            if (u) {
-                                env.onSnapshot(env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'assignments'), (s) => setAssignments(s.docs.map(d => ({id:d.id, ...d.data()}))));
-                                env.onSnapshot(env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'comments'), (s) => setComments(s.docs.map(d => ({id:d.id, ...d.data()}))));
-                            }
-                        });
-                        clearInterval(interval);
+                const env = window.firebaseEnv;
+                if (!env) return;
+
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await env.signInWithCustomToken(env.auth, __initial_auth_token);
+                    } else {
+                        await env.signInAnonymously(env.auth);
                     }
-                }, 500);
+                };
+                initAuth();
+
+                const unsubscribe = env.onAuthStateChanged(env.auth, (u) => {
+                    setUser(u);
+                });
+                return () => unsubscribe();
             }, []);
 
-            const getAssignmentStatus = (weekDate, createdAt) => {
+            useEffect(() => {
+                const env = window.firebaseEnv;
+                if (!user || !env) return;
+
+                // 監聽作業 (路徑：artifacts/appId/public/data/assignments)
+                const unsubAssignments = env.onSnapshot(
+                    env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'assignments'),
+                    (s) => setAssignments(s.docs.map(d => ({id:d.id, ...d.data()}))),
+                    (err) => console.error(err)
+                );
+
+                // 監聽留言 (路徑：artifacts/appId/public/data/comments)
+                const unsubComments = env.onSnapshot(
+                    env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'comments'),
+                    (s) => {
+                        const data = s.docs.map(d => ({id:d.id, ...d.data()}));
+                        // 排序：舊到新
+                        data.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+                        setComments(data);
+                    },
+                    (err) => console.error(err)
+                );
+
+                return () => { unsubAssignments(); unsubComments(); };
+            }, [user]);
+
+            const getHWStatus = (weekDate, createdAt) => {
                 if (!createdAt) return "未完成";
                 const [m, d] = weekDate.split('/').map(Number);
-                const deadlineDate = new Date(new Date().getFullYear(), m - 1, d, 20, 0, 0);
-                const submitDate = createdAt.toDate ? createdAt.toDate() : new Date();
-                return submitDate > deadlineDate ? "遲到" : "準時";
+                const deadline = new Date(new Date().getFullYear(), m - 1, d, 20, 0, 0);
+                return (createdAt.toDate ? createdAt.toDate() : new Date()) > deadline ? "遲到" : "準時";
             };
 
-            const getPeerStats = (weekDate, userName) => {
-                const timelyClassAssignments = assignments.filter(a =>
-                    a.weekDate === weekDate && a.studentClass === identity.class && a.studentName !== userName && getAssignmentStatus(a.weekDate, a.createdAt) === "準時"
-                );
-                const completedFeedbacks = timelyClassAssignments.filter(a =>
-                    comments.some(c => c.assignmentId === a.id && c.author === userName)
-                );
-                return {
-                    denominator: timelyClassAssignments.length,
-                    numerator: completedFeedbacks.length,
-                    percentage: timelyClassAssignments.length === 0 ? 100 : Math.round((completedFeedbacks.length / timelyClassAssignments.length) * 100)
-                };
+            const getFBStats = (weekDate, userName, userClass) => {
+                const targets = assignments.filter(a => a.weekDate === weekDate && a.studentClass === userClass && a.studentName !== userName && getHWStatus(a.weekDate, a.createdAt) === "準時");
+                const done = targets.filter(a => comments.some(c => c.assignmentId === a.id && c.author === userName));
+                const percentage = targets.length === 0 ? 100 : Math.round((done.length / targets.length) * 100);
+                let status = "未完成";
+                if (targets.length === 0 || done.length >= targets.length) status = "準時";
+                else if (done.length > 0) status = "遲到";
+                return { numerator: done.length, denominator: targets.length, percentage, status };
             };
 
-            if (loading) return <div className="h-screen flex items-center justify-center font-black text-rose-500 italic text-2xl animate-pulse">連線中...</div>;
+            const handleLogin = () => {
+                if (!tempClass || !tempName) return;
+                const d = { name: tempName, class: tempClass };
+                setIdentity(d);
+                localStorage.setItem('portal_identity', JSON.stringify(d));
+            };
+
+            const deleteAssignment = async (id) => {
+                if(!confirm("確定要刪除這份作業嗎？")) return;
+                const env = window.firebaseEnv;
+                try {
+                    await env.deleteDoc(env.doc(env.db, 'artifacts', env.appId, 'public', 'data', 'assignments', id));
+                } catch (e) { console.error("刪除失敗", e); }
+            };
+
+            const deleteComment = async (id) => {
+                if(!confirm("確定要刪除這條留言嗎？")) return;
+                const env = window.firebaseEnv;
+                try {
+                    await env.deleteDoc(env.doc(env.db, 'artifacts', env.appId, 'public', 'data', 'comments', id));
+                } catch (e) { console.error("刪除失敗", e); }
+            };
 
             if (!identity) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center p-4 bg-rose-50/30">
-                        <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md border-t-8 border-rose-400 text-center">
-                            <h1 className="text-3xl font-black text-slate-800 mb-6 italic tracking-tight underline decoration-rose-300">Q1 Classroom</h1>
+                    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+                        <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md border-t-8 border-indigo-500 text-center font-black">
+                            <h1 className="text-3xl text-slate-800 mb-6 italic underline decoration-indigo-200">Q1 Classroom ✨</h1>
                             <div className="flex gap-2 mb-6">
-                                {Object.keys(STUDENT_LIST).map(c => (
-                                    <button key={c} onClick={() => { setTempClass(c); setTempName(""); }} className={`flex-1 p-3 border-2 rounded-2xl font-black transition ${tempClass === c ? 'border-rose-400 bg-rose-400 text-white' : 'border-slate-100 text-slate-400 hover:bg-rose-50'}`}>{c}</button>
+                                {["早班", "晚班"].map(c => (
+                                    <button key={c} onClick={() => { setTempClass(c); setTempName(""); }} className={`flex-1 p-3 border-2 rounded-2xl transition ${tempClass === c ? 'border-indigo-500 bg-indigo-500 text-white shadow-md' : 'border-slate-100 text-slate-400 hover:bg-indigo-50'}`}>{c}</button>
                                 ))}
                             </div>
-                            <select value={tempName} onChange={(e) => setTempName(e.target.value)} className="w-full p-4 border-2 border-slate-100 rounded-2xl mb-8 font-black outline-none bg-slate-50/50" disabled={!tempClass}>
-                                <option value="">選取姓名</option>
+                            <select value={tempName} onChange={(e) => setTempName(e.target.value)} className="w-full p-4 border-2 border-slate-100 rounded-2xl mb-8 outline-none bg-slate-50 text-slate-700" disabled={!tempClass}>
+                                <option value="">你是哪位同學？</option>
                                 {tempClass && STUDENT_LIST[tempClass].map(n => <option key={n} value={n}>{n}</option>)}
                             </select>
-                            <button onClick={() => { if(tempName) { const d = {name: tempName, class: tempClass}; setIdentity(d); localStorage.setItem('portal_identity', JSON.stringify(d)); } }} className="w-full pink-gradient text-white p-4 rounded-2xl font-black shadow-lg hover:brightness-110 active:scale-95 transition">開始陪跑</button>
+                            <button onClick={handleLogin} className="w-full blue-gradient text-white p-4 rounded-2xl shadow-lg hover:brightness-110 transition disabled:opacity-50" disabled={!tempName}>開始陪跑</button>
                         </div>
                     </div>
                 );
@@ -144,125 +169,200 @@
 
             return (
                 <div className="min-h-screen flex flex-col lg:flex-row">
-                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-                    <nav className="w-full lg:w-72 bg-white p-8 flex flex-col border-r border-slate-100 shrink-0">
-                        <div className="pink-gradient p-5 rounded-[30px] text-white shadow-lg mb-10 flex items-center gap-4">
-                            <div className="bg-white/20 p-2 rounded-xl"><Icon name="smile" /></div>
-                            <div className="overflow-hidden"><div className="font-black text-lg truncate leading-tight">{identity.name}</div><div className="text-[10px] opacity-80 uppercase font-black">{identity.class}</div></div>
+                    <nav className="w-full lg:w-72 bg-white p-8 flex flex-col border-r border-slate-200 shrink-0 font-black">
+                        <div className="blue-gradient p-5 rounded-[30px] text-white shadow-lg mb-10 flex items-center gap-4">
+                            <div className="bg-white/20 p-2 rounded-xl"><Icon name="user" /></div>
+                            <div className="overflow-hidden">
+                                <div className="text-lg truncate">{identity.name}</div>
+                                <div className="text-[10px] opacity-80 uppercase tracking-widest">{identity.class}</div>
+                            </div>
                         </div>
                         <div className="space-y-2 flex-1">
-                            <button onClick={()=>setCurrentView('upload')} className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black transition ${currentView==='upload'?'bg-rose-50 text-rose-500 shadow-sm':'text-slate-400'}`}><Icon name="file-up" />作業上傳</button>
-                            <button onClick={()=>setCurrentView('peer')} className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black transition ${currentView==='peer'?'bg-rose-50 text-rose-500 shadow-sm':'text-slate-400'}`}><Icon name="users-round" />同儕互評</button>
-                            <button onClick={()=>setCurrentView('personal')} className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black transition ${currentView==='personal'?'bg-rose-50 text-rose-500 shadow-sm':'text-slate-400'}`}><Icon name="heart" />我的回饋</button>
-                            <button onClick={()=>setCurrentView('overview')} className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black transition ${currentView==='overview'?'bg-rose-50 text-rose-500 shadow-sm':'text-slate-400'}`}><Icon name="layout-dashboard" />總覽</button>
+                            {['upload', 'peer', 'personal', 'overview'].map(v => (
+                                <button key={v} onClick={()=>setCurrentView(v)} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition ${currentView===v?'bg-indigo-50 text-indigo-600 shadow-sm':'text-slate-400 hover:text-indigo-400'}`}>
+                                    <Icon name={v==='upload'?'file-up':v==='peer'?'users-round':v==='personal'?'heart':'layout-dashboard'} />
+                                    {v==='upload'?'作業上傳':v==='peer'?'同儕互評':v==='personal'?'我的回饋':'總覽'}
+                                </button>
+                            ))}
+                            <div className="my-6 border-t border-slate-100"></div>
+                            <button onClick={()=>{localStorage.clear(); window.location.reload();}} className="w-full flex items-center gap-4 p-4 text-slate-300 hover:text-indigo-500 transition"><Icon name="power" />登出系統</button>
                         </div>
-                        <button onClick={()=>{localStorage.clear(); window.location.reload();}} className="mt-10 w-full flex items-center gap-4 p-4 text-slate-300 font-black hover:text-rose-500 transition"><Icon name="power" />登出系統</button>
                     </nav>
 
                     <main className="flex-1 p-6 lg:p-12 overflow-y-auto">
-                        {currentView === 'overview' ? (
-                            <div className="max-w-6xl mx-auto space-y-12">
-                                <h1 className="text-3xl font-black text-slate-800 italic underline decoration-rose-300 decoration-4">Class Progress Dashboard</h1>
-                                <div className="bg-white rounded-[40px] card-shadow border border-rose-50 overflow-hidden overflow-x-auto">
-                                    <table className="w-full text-left">
-                                        <thead>
-                                            <tr className="bg-rose-50/30">
-                                                <th className="p-4 font-black text-xs text-rose-400 sticky left-0 bg-white border-r">學員姓名</th>
-                                                {SEMESTER_WEEKS.map(w => <th key={w.date} className="p-4 font-black text-[10px] text-center whitespace-nowrap">{w.date}<br/><span className="opacity-40">HW | FB</span></th>)}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {STUDENT_LIST[identity.class].map(name => (
-                                                <tr key={name} className="border-b border-slate-50">
-                                                    <td className="p-4 font-black text-sm text-slate-600 sticky left-0 bg-white border-r">{name}</td>
-                                                    {SEMESTER_WEEKS.map(w => {
-                                                        const work = assignments.find(a => a.studentName === name && a.weekDate === w.date);
-                                                        const workStatus = work ? getAssignmentStatus(w.date, work.createdAt) : "未完成";
-                                                        const stats = getPeerStats(w.date, name);
-                                                        return (
-                                                            <td key={w.date} className="p-2 text-center">
-                                                                <div className={`text-[8px] font-black p-1 rounded ${workStatus==='準時'?'text-emerald-500':'text-rose-400'}`}>{workStatus}</div>
-                                                                <div className="text-[8px] font-black opacity-40">{stats.numerator}/{stats.denominator}</div>
-                                                            </td>
-                                                        );
-                                                    })}
+                        {currentView === 'overview' && (
+                            <div className="max-w-6xl mx-auto space-y-8 font-black">
+                                <h1 className="text-3xl text-slate-800 italic underline decoration-indigo-200">Class Progress 📊</h1>
+                                <div className="bg-white rounded-[40px] card-shadow border border-slate-100 overflow-hidden">
+                                    <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                        <span className="text-slate-800 text-sm">全班進度一覽 (作業/評價)</span>
+                                        <div className="flex gap-4 text-[10px] uppercase">
+                                            <span className="text-emerald-500">● 準時</span> <span className="text-amber-500">● 遲到</span> <span className="text-rose-500">● 未完成</span>
+                                        </div>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead>
+                                                <tr className="bg-slate-50 text-[10px] text-slate-400">
+                                                    <th className="p-4 sticky left-0 bg-white border-r">學員姓名</th>
+                                                    {SEMESTER_WEEKS.map(w => <th key={w.date} className="p-4 text-center">{w.date}</th>)}
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody>
+                                                {STUDENT_LIST[identity.class].map(name => (
+                                                    <tr key={name} className="hover:bg-slate-50 transition border-b border-slate-100">
+                                                        <td className="p-4 text-sm text-slate-600 sticky left-0 bg-white border-r">{name}</td>
+                                                        {SEMESTER_WEEKS.map(w => {
+                                                            const hw = assignments.find(a => a.studentName === name && a.weekDate === w.date);
+                                                            const hwStatus = hw ? getHWStatus(w.date, hw.createdAt) : "未完成";
+                                                            const fb = getFBStats(w.date, name, identity.class);
+                                                            return (
+                                                                <td key={w.date} className="p-2 min-w-[90px]">
+                                                                    <div className="flex flex-col gap-1 text-[8px] text-center">
+                                                                        <div className={`rounded py-0.5 ${hwStatus==='準時'?'bg-emerald-100 text-emerald-600':hwStatus==='遲到'?'bg-amber-100 text-amber-600':'bg-rose-100 text-rose-600'}`}>HW: {hwStatus}</div>
+                                                                        <div className={`rounded py-0.5 ${fb.status==='準時'?'bg-emerald-50 text-indigo-400':fb.status==='遲到'?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-300'}`}>FB: {fb.numerator}/{fb.denominator}</div>
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
-                        ) : currentView === 'upload' ? (
-                            <div className="max-w-5xl mx-auto">
-                                <h2 className="text-xl font-black text-slate-800 mb-8 border-b-2 border-rose-400 inline-block pb-1 italic">Weekly Submission</h2>
+                        )}
+
+                        {currentView === 'upload' && (
+                            <div className="max-w-4xl mx-auto space-y-6 font-black">
+                                <h2 className="text-xl text-slate-800 border-b-2 border-indigo-500 inline-block italic">Weekly Submission</h2>
                                 {SEMESTER_WEEKS.map((w, i) => (
-                                    <div key={i} className="bg-white p-8 rounded-[40px] card-shadow mb-6 flex flex-col md:flex-row gap-8 items-center border hover:border-rose-100 transition group">
-                                        <div className="w-16 h-16 pink-gradient rounded-3xl flex items-center justify-center font-black text-white text-xl shadow-lg italic">W{i+1}</div>
-                                        <div className="flex-1 w-full">
-                                            <div className="text-[10px] font-black text-slate-300 mb-4 tracking-widest uppercase">繳交期限: {w.date} 20:00</div>
-                                            {assignments.filter(a => a.weekDate === w.date && a.studentName === identity.name).map(a => (
-                                                <div key={a.id} className="bg-slate-50 p-4 rounded-2xl mb-4 flex justify-between items-center border border-slate-100">
-                                                    <a href={a.url} target="_blank" className="text-sm font-black text-rose-500 underline truncate flex-1">{a.url}</a>
-                                                    <button onClick={async ()=>{ if(confirm("確定刪除？")){ await window.firebaseEnv.deleteDoc(window.firebaseEnv.doc(window.firebaseEnv.db, 'artifacts', window.firebaseEnv.appId, 'public', 'data', 'assignments', a.id)); setToast({message:"已刪除", type:"success"}); }}} className="ml-4 text-slate-300 hover:text-rose-500 text-xs font-black">刪除</button>
-                                                </div>
-                                            ))}
-                                            <div className="flex gap-3">
-                                                <input id={`in-${w.date}`} className="flex-1 bg-slate-50 border-b-2 border-slate-100 outline-none p-3 text-sm focus:border-rose-400 transition" placeholder="輸入作品連結..." />
-                                                <button onClick={async () => { const el = document.getElementById(`in-${w.date}`); if(!el.value) return; await window.firebaseEnv.addDoc(window.firebaseEnv.collection(window.firebaseEnv.db, 'artifacts', window.firebaseEnv.appId, 'public', 'data', 'assignments'), { studentName: identity.name, studentClass: identity.class, weekDate: w.date, url: el.value, createdAt: window.firebaseEnv.serverTimestamp() }); el.value = ''; setToast({message:"上傳成功", type:"success"}); }} className="pink-gradient text-white px-8 py-3 rounded-2xl font-black shadow-lg">提交</button>
+                                    <div key={i} className="bg-white p-8 rounded-[40px] card-shadow flex flex-col md:flex-row gap-6 items-center border border-slate-50 hover:border-indigo-100 transition">
+                                        <div className="w-14 h-14 blue-gradient rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md italic">W{i+1}</div>
+                                        <div className="flex-1 w-full space-y-4">
+                                            <div className="text-[10px] text-slate-300 tracking-widest uppercase italic">繳交期限: {w.date} 20:00</div>
+                                            {assignments.filter(a => a.weekDate === w.date && a.studentName === identity.name).map(a => {
+                                                const status = getHWStatus(w.date, a.createdAt);
+                                                return (
+                                                    <div key={a.id} className="bg-slate-50 p-4 rounded-2xl flex justify-between items-center border border-slate-100">
+                                                        <div className="flex items-center gap-3 overflow-hidden">
+                                                            <a href={a.url} target="_blank" className="text-sm text-indigo-600 underline truncate">{a.url}</a>
+                                                            <span className={`text-[9px] px-2 py-0.5 rounded-md ${status==='準時'?'bg-emerald-100 text-emerald-600':'bg-amber-100 text-amber-600'}`}>狀態：{status}</span>
+                                                        </div>
+                                                        <button onClick={()=>deleteAssignment(a.id)} className="text-rose-500 text-xs px-3 hover:underline">刪除</button>
+                                                    </div>
+                                                );
+                                            })}
+                                            <div className="flex gap-2">
+                                                <input id={`in-${w.date}`} className="flex-1 bg-slate-50 border-b-2 border-slate-100 outline-none p-3 text-sm focus:border-indigo-500 transition" placeholder="輸入作品連結..." />
+                                                <button onClick={async () => {
+                                                    const el = document.getElementById(`in-${w.date}`);
+                                                    if(!el.value) return;
+                                                    await window.firebaseEnv.addDoc(window.firebaseEnv.collection(window.firebaseEnv.db, 'artifacts', window.firebaseEnv.appId, 'public', 'data', 'assignments'), { studentName: identity.name, studentClass: identity.class, weekDate: w.date, url: el.value, createdAt: window.firebaseEnv.serverTimestamp() });
+                                                    el.value = '';
+                                                }} className="blue-gradient text-white px-6 py-3 rounded-2xl shadow-md hover:brightness-110 active:scale-95 transition shrink-0 text-sm">提交作業</button>
                                             </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        ) : currentView === 'peer' ? (
-                            <div className="max-w-6xl mx-auto space-y-8">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-2xl font-black text-slate-800 italic">Peer Feedback</h2>
-                                    <select value={selectedPeerDate} onChange={(e)=>setSelectedPeerDate(e.target.value)} className="bg-white p-3 rounded-2xl shadow-sm font-black outline-none border-2 border-rose-50">
-                                        {SEMESTER_WEEKS.map(w => <option key={w.date} value={w.date}>第 {w.date} 週</option>)}
+                        )}
+
+                        {currentView === 'peer' && (
+                            <div className="max-w-6xl mx-auto space-y-6 font-black">
+                                <div className="bg-indigo-50 text-indigo-700 p-6 rounded-[30px] shadow-sm border-l-8 border-indigo-400 flex items-center justify-between">
+                                    <div className="space-y-1">
+                                        <h4 className="text-sm italic flex items-center gap-2"><Icon name="lightbulb" size={14} className="text-amber-500" /> 💡 互評規則</h4>
+                                        <p className="text-[10px] opacity-80">評價週期：早班 5:00 前、晚班 21:30 前完成，兩週結算。僅計週日 20:00 前準時提交作業者。</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] opacity-50 uppercase tracking-widest">當週待評進度</div>
+                                        <div className="text-xl italic">{getFBStats(selectedPeerDate, identity.name, identity.class).numerator} / {getFBStats(selectedPeerDate, identity.name, identity.class).denominator}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <select value={selectedPeerDate} onChange={(e)=>setSelectedPeerDate(e.target.value)} className="bg-white text-slate-700 p-3 px-5 rounded-2xl outline-none shadow-sm cursor-pointer border border-slate-100 hover:border-indigo-300 transition">
+                                        {SEMESTER_WEEKS.map(w => <option key={w.date} value={w.date}>第 {w.date} 週作業</option>)}
                                     </select>
                                 </div>
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {assignments.filter(a => a.weekDate === selectedPeerDate && a.studentClass === identity.class).map(a => (
-                                        <div key={a.id} className="bg-white rounded-[40px] p-6 card-shadow flex flex-col h-[450px] border-2 border-transparent hover:border-rose-100 transition">
-                                            <div className="flex justify-between items-center mb-6">
-                                                <div className="font-black text-slate-800 truncate">{a.studentName}</div>
-                                                <a href={a.url} target="_blank" className="p-3 bg-rose-50 text-rose-500 rounded-xl"><Icon name="external-link" size={16} /></a>
-                                            </div>
-                                            <div className="flex-1 overflow-y-auto space-y-3 mb-6 scrollbar-hide">
-                                                {comments.filter(c => c.assignmentId === a.id).sort((x,y)=>(x.createdAt?.seconds||0)-(y.createdAt?.seconds||0)).map((c, idx) => (
-                                                    <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 relative group/msg">
-                                                        <div className="text-rose-500 font-black text-[10px] mb-1">{c.author}</div>
-                                                        <div className="text-slate-600 text-xs font-black">{c.text}</div>
-                                                        {c.author === identity.name && <button onClick={async ()=>{ if(confirm("確定刪除？")){ await window.firebaseEnv.deleteDoc(window.firebaseEnv.doc(window.firebaseEnv.db, 'artifacts', window.firebaseEnv.appId, 'public', 'data', 'comments', c.id)); }}} className="absolute right-2 top-2 opacity-0 group-hover/msg:opacity-100 text-slate-300 hover:text-rose-500">×</button>}
+                                    {assignments.filter(a => a.weekDate === selectedPeerDate && a.studentClass === identity.class).map(a => {
+                                        const isSelf = a.studentName === identity.name;
+                                        const isTimely = getHWStatus(a.weekDate, a.createdAt) === "準時";
+                                        const hasDone = comments.some(c => c.assignmentId === a.id && c.author === identity.name);
+                                        return (
+                                            <div key={a.id} className={`bg-white rounded-[40px] p-6 card-shadow flex flex-col h-[420px] border-2 transition ${isSelf ? 'border-indigo-500' : 'border-transparent'}`}>
+                                                <div className="flex justify-between items-start mb-6 shrink-0">
+                                                    <div>
+                                                        <div className="text-slate-800 text-lg">{a.studentName}</div>
+                                                        <div className="flex gap-1 mt-1 text-[8px]">
+                                                            {isTimely ? (!hasDone && !isSelf && <span className="text-indigo-500 animate-pulse">● 待評中</span>) : <span className="text-slate-300">● 遲到免評</span>}
+                                                            {isSelf && <span className="text-indigo-400 underline italic">這是我的作業</span>}
+                                                        </div>
                                                     </div>
-                                                ))}
+                                                    <a href={a.url} target="_blank" className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs hover:bg-indigo-600 hover:text-white transition shadow-sm flex items-center gap-1">觀看 <Icon name="external-link" size={12} /></a>
+                                                </div>
+                                                <div className="flex-1 overflow-y-auto space-y-3 mb-4 scrollbar-hide">
+                                                    {comments.filter(c => c.assignmentId === a.id).map((c, idx) => {
+                                                        const isSelfCmt = c.author === identity.name;
+                                                        const isWorkOwner = c.author === a.studentName;
+                                                        return (
+                                                            <div key={c.id} className={`p-3 rounded-2xl text-[10px] bg-slate-50 border border-slate-100 group relative`}>
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <span className="text-indigo-500">
+                                                                        {c.author} {isWorkOwner && "(創作理念)"}
+                                                                    </span>
+                                                                    {isSelfCmt && (
+                                                                        <button onClick={()=>deleteComment(c.id)} className="text-rose-400 opacity-0 group-hover:opacity-100 transition">刪除</button>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-slate-600 leading-relaxed">{c.text}</div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="flex gap-2 p-1 bg-slate-50 rounded-2xl border border-slate-100 focus-within:bg-white transition-all">
+                                                    <input id={`cm-${a.id}`} className="flex-1 bg-transparent p-2 text-[10px] outline-none" placeholder={isSelf ? "補充創作理念..." : "給予鼓勵或建議..."} />
+                                                    <button onClick={async () => {
+                                                        const el = document.getElementById(`cm-${a.id}`);
+                                                        if(!el.value) return;
+                                                        await window.firebaseEnv.addDoc(window.firebaseEnv.collection(window.firebaseEnv.db, 'artifacts', window.firebaseEnv.appId, 'public', 'data', 'comments'), { assignmentId: a.id, author: identity.name, text: el.value, createdAt: window.firebaseEnv.serverTimestamp() });
+                                                        el.value = '';
+                                                    }} className="bg-slate-800 text-white p-2 px-3 rounded-xl shadow-md shrink-0 hover:brightness-110 active:scale-95 transition"><Icon name="send" size={12} /></button>
+                                                </div>
                                             </div>
-                                            <div className="flex gap-2 p-1 bg-slate-50 rounded-2xl border">
-                                                <input id={`cm-${a.id}`} className="flex-1 bg-transparent p-3 text-xs outline-none font-black" placeholder="寫點回饋..." />
-                                                <button onClick={async () => { const el = document.getElementById(`cm-${a.id}`); if(!el.value) return; await window.firebaseEnv.addDoc(window.firebaseEnv.collection(window.firebaseEnv.db, 'artifacts', window.firebaseEnv.appId, 'public', 'data', 'comments'), { assignmentId: a.id, author: identity.name, text: el.value, createdAt: window.firebaseEnv.serverTimestamp() }); el.value = ''; }} className="bg-slate-800 text-white p-3 rounded-xl"><Icon name="send" size={14} /></button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
-                        ) : (
-                            <div className="max-w-5xl mx-auto space-y-8">
-                                <h2 className="text-xl font-black text-slate-800 italic">Received Feedback</h2>
-                                {assignments.filter(a => a.studentName === identity.name).map(a => (
-                                    <div key={a.id} className="bg-white p-8 rounded-[40px] card-shadow border border-rose-50 mb-6">
-                                        <div className="text-rose-500 font-black mb-4 italic">Week {a.weekDate}</div>
+                        )}
+
+                        {currentView === 'personal' && (
+                            <div className="max-w-4xl mx-auto space-y-6 font-black">
+                                <h2 className="text-xl text-slate-800 border-b-2 border-indigo-500 inline-block italic">我收到的回饋</h2>
+                                {assignments.filter(a => a.studentName === identity.name)
+                                    .sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)) // 舊到新：上到下日期越來越新
+                                    .map(a => (
+                                    <div key={a.id} className="bg-white rounded-[40px] p-8 card-shadow border border-slate-100 space-y-6">
+                                        <div className="flex justify-between items-center pb-4 border-b border-slate-50">
+                                            <div>
+                                                <span className="text-indigo-600 italic mr-3">Week {a.weekDate}</span>
+                                                <span className="text-[10px] text-slate-300 italic truncate max-w-[200px] inline-block align-middle">{a.url}</span>
+                                            </div>
+                                            <a href={a.url} target="_blank" className="text-xs px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition">觀看作品連結</a>
+                                        </div>
                                         <div className="space-y-4">
                                             {comments.filter(c => c.assignmentId === a.id && c.author !== identity.name).map((c, idx) => (
-                                                <div key={idx} className="flex gap-4 items-start">
-                                                    <div className="w-10 h-10 rounded-full pink-gradient flex items-center justify-center text-white font-black text-xs">{c.author[0]}</div>
-                                                    <div className="flex-1 bg-slate-50 p-4 rounded-3xl border border-slate-100">
-                                                        <div className="text-[10px] font-black text-rose-400 mb-1">{c.author}</div>
-                                                        <div className="text-sm font-black text-slate-600">{c.text}</div>
+                                                <div key={c.id} className="flex gap-4 items-start">
+                                                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600 text-xs">{c.author[0]}</div>
+                                                    <div className="bg-slate-50 p-4 rounded-[24px] flex-1">
+                                                        <div className="text-[9px] text-indigo-400 mb-1">{c.author}</div>
+                                                        <div className="text-sm text-slate-600 leading-relaxed">{c.text}</div>
                                                     </div>
                                                 </div>
                                             ))}
-                                            {comments.filter(c => c.assignmentId === a.id && c.author !== identity.name).length === 0 && <div className="text-slate-200 italic font-black text-xs">暫無新回饋</div>}
+                                            {comments.filter(c => c.assignmentId === a.id && c.author !== identity.name).length === 0 && <div className="text-center py-6 text-slate-200 text-xs italic font-black">同學正在快馬加鞭評論中... ✨</div>}
                                         </div>
                                     </div>
                                 ))}
@@ -272,8 +372,7 @@
                 </div>
             );
         }
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
