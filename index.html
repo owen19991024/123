@@ -20,7 +20,7 @@
     </style>
 </head>
 <body>
-    <div id="loading-overlay" class="font-black text-indigo-600 text-2xl italic animate-pulse">系統穩定載入中... 🚀</div>
+    <div id="loading-overlay" class="font-black text-indigo-600 text-2xl italic animate-pulse">系統啟動中... 🚀</div>
     <div id="root"></div>
 
     <script type="module">
@@ -73,10 +73,11 @@
         function App() {
             const [ready, setReady] = useState(false);
             const [identity, setIdentity] = useState(JSON.parse(localStorage.getItem('portal_identity')));
+            const [loginClass, setLoginClass] = useState(""); // 登入選用的班級
             const [currentView, setCurrentView] = useState('upload');
             const [assignments, setAssignments] = useState([]);
             const [comments, setComments] = useState([]);
-            const [announcement, setAnnouncement] = useState("✨ 歡迎來到陪跑班系統");
+            const [announcement, setAnnouncement] = useState("歡迎來到 Q1 Classroom 🚀");
             const [selectedPeerDate, setSelectedPeerDate] = useState("1/4");
             const [overviewClass, setOverviewClass] = useState("早班");
 
@@ -126,7 +127,6 @@
                 return commentDate > deadlineDate ? "遲到" : "準時";
             };
 
-            // 修正版 PeerStats 計算，支援動態傳入班級
             const getPeerStats = (weekDate, userName, userClass) => {
                 const timelyTargets = assignments.filter(a =>
                     a.weekDate === weekDate && a.studentClass === userClass && a.studentName !== userName && getHWStatus(a.weekDate, a.createdAt) === "準時"
@@ -145,34 +145,39 @@
 
             if (!identity) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center p-4">
-                        <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md border-t-8 border-indigo-600 text-center font-black">
-                            <h1 className="text-3xl text-slate-800 mb-6 italic underline decoration-indigo-200">Q1 Classroom</h1>
-                            <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 text-left">
+                        <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md border-t-8 border-indigo-600 font-black">
+                            <h1 className="text-3xl text-slate-800 mb-6 italic underline decoration-indigo-200 text-center">Q1 Classroom</h1>
+                            
+                            <label className="block text-xs text-slate-400 mb-2">1. 選擇班級</label>
+                            <div className="grid grid-cols-2 gap-2 mb-6">
                                 {["早班", "晚班"].map(c => (
-                                    <button key={c} onClick={() => window.selCls = c} className="p-3 border-2 rounded-2xl border-slate-100 text-slate-400 focus:bg-rose-400 focus:text-white transition">{c}</button>
+                                    <button key={c} onClick={() => setLoginClass(c)} className={`p-3 border-2 rounded-2xl transition ${loginClass === c ? 'border-indigo-600 bg-indigo-600 text-white shadow-md' : 'border-slate-100 text-slate-400 hover:bg-slate-50'}`}>{c}</button>
                                 ))}
                             </div>
-                            <select id="name-sel" className="w-full p-4 border-2 border-slate-100 rounded-2xl mb-8 outline-none bg-slate-50 text-slate-700">
-                                <option value="">選取姓名</option>
-                                {Object.values(STUDENT_LIST).flat().map(n => <option key={n} value={n}>{n}</option>)}
+
+                            <label className="block text-xs text-slate-400 mb-2">2. 您的姓名</label>
+                            <select id="name-sel" className="w-full p-4 border-2 border-slate-100 rounded-2xl mb-8 outline-none bg-slate-50 text-slate-700" disabled={!loginClass}>
+                                <option value="">{loginClass ? "請選取姓名" : "請先選取上方班級"}</option>
+                                {loginClass && STUDENT_LIST[loginClass].map(n => <option key={n} value={n}>{n}</option>)}
                             </select>
+
                             <button onClick={() => {
                                 const n = document.getElementById('name-sel').value;
-                                if(n && window.selCls) {
-                                    const d = { name: n, class: window.selCls };
+                                if(n && loginClass) {
+                                    const d = { name: n, class: loginClass };
                                     setIdentity(d);
                                     localStorage.setItem('portal_identity', JSON.stringify(d));
                                 }
-                            }} className="w-full blue-gradient text-white p-4 rounded-2xl font-black shadow-lg">進入教室</button>
+                            }} className="w-full blue-gradient text-white p-4 rounded-2xl shadow-lg hover:scale-105 transition active:scale-95">進入教室系統</button>
                         </div>
                     </div>
                 );
             }
 
             return (
-                <div className="min-h-screen flex flex-col lg:flex-row">
-                    <nav className="w-full lg:w-72 bg-white p-8 flex flex-col border-r border-slate-200 shrink-0 font-black">
+                <div className="min-h-screen flex flex-col lg:flex-row font-black">
+                    <nav className="w-full lg:w-72 bg-white p-8 flex flex-col border-r border-slate-200 shrink-0">
                         <div className="blue-gradient p-5 rounded-[30px] text-white shadow-lg mb-10 flex items-center gap-4 text-left">
                             <Icon name="user" />
                             <div className="overflow-hidden">
@@ -189,32 +194,172 @@
                         </div>
                     </nav>
 
-                    <main className="flex-1 p-6 lg:p-12 overflow-y-auto font-black text-left">
+                    <main className="flex-1 p-6 lg:p-12 overflow-y-auto text-left">
                         <div className="max-w-5xl mx-auto mb-10 bg-white p-6 rounded-[30px] card-shadow border border-slate-100 flex items-center gap-6 relative group">
                             <div className="bg-indigo-50 p-4 rounded-2xl text-indigo-600 shadow-inner"><Icon name="megaphone" /></div>
                             <div className="flex-1 text-slate-700 tracking-tight">{announcement}</div>
                             <button onClick={async () => {
                                 if (prompt("管理密碼:") === "admin") {
-                                    const nt = prompt("輸入公告:", announcement);
+                                    const nt = prompt("輸入新公告:", announcement);
                                     if(nt) await window.fb.setDoc(window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'announcement'), {text: nt});
                                 }
-                            }} className="p-2 text-slate-200 hover:text-indigo-600 transition opacity-0 group-hover:opacity-100"><Icon name="settings" size={16} /></button>
+                            }} className="p-2 text-slate-200 hover:text-indigo-600 transition"><Icon name="settings" size={16} /></button>
                         </div>
 
-                        {currentView === 'overview' ? (
+                        {currentView === 'upload' ? (
+                            <div className="max-w-4xl mx-auto space-y-6">
+                                <h2 className="text-xl text-slate-800 border-b-2 border-indigo-500 inline-block italic">Weekly Submission</h2>
+                                {SEMESTER_WEEKS.map((w, i) => (
+                                    <div key={i} className="bg-white p-8 rounded-[40px] card-shadow border border-slate-50 flex flex-col md:flex-row gap-6 items-center">
+                                        <div className="w-14 h-14 blue-gradient rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md italic text-xl">W{i+1}</div>
+                                        <div className="flex-1 w-full space-y-4">
+                                            <div className="text-[10px] text-slate-300 uppercase tracking-widest italic">{w.date} 20:00 截止</div>
+                                            {assignments.filter(a => a.weekDate === w.date && a.studentName === identity.name).map(a => {
+                                                const status = getHWStatus(a.weekDate, a.createdAt);
+                                                return (
+                                                    <div key={a.id} className="bg-slate-50 p-4 rounded-2xl flex justify-between items-center border border-slate-100">
+                                                        <div className="flex items-center gap-3 overflow-hidden">
+                                                            <a href={a.url} target="_blank" className="text-sm text-indigo-600 underline truncate">{a.url}</a>
+                                                            <span className={`text-[9px] px-2 py-0.5 rounded-md ${status==='準時'?'bg-emerald-100 text-emerald-600':'bg-amber-100 text-amber-600'}`}>上傳狀態：{status}</span>
+                                                        </div>
+                                                        <button onClick={async ()=>{ if(confirm("刪除？")) await window.fb.deleteDoc(window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'assignments', a.id)); }} className="ml-4 text-rose-500 text-xs hover:underline">刪除</button>
+                                                    </div>
+                                                );
+                                            })}
+                                            <div className="flex gap-3">
+                                                <input id={`in-${w.date}`} className="flex-1 bg-slate-50 border-b-2 border-slate-100 outline-none p-3 text-sm focus:border-indigo-500 transition" placeholder="輸入連結..." />
+                                                <button onClick={async () => {
+                                                    const el = document.getElementById(`in-${w.date}`);
+                                                    if(el.value) {
+                                                        await window.fb.addDoc(window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'assignments'), { studentName: identity.name, studentClass: identity.class, weekDate: w.date, url: el.value, createdAt: window.fb.serverTimestamp() });
+                                                        el.value = '';
+                                                    }
+                                                }} className="blue-gradient text-white px-8 py-3 rounded-2xl shadow-lg">提交作業</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : currentView === 'peer' ? (
+                            <div className="max-w-6xl mx-auto space-y-6">
+                                {/* 評價進度儀表板 */}
+                                {(() => {
+                                    const stats = getPeerStats(selectedPeerDate, identity.name, identity.class);
+                                    const percent = stats.denominator > 0 ? (stats.numerator / stats.denominator) * 100 : 0;
+                                    return (
+                                        <div className="bg-white p-8 rounded-[40px] card-shadow border-l-8 border-indigo-600 flex flex-col md:flex-row gap-8 items-center justify-between">
+                                            <div className="flex-1 w-full">
+                                                <div className="flex justify-between items-end mb-2">
+                                                    <div>
+                                                        <h3 className="text-2xl text-slate-800 italic">評價進度儀表板</h3>
+                                                        <p className="text-slate-400 text-[10px]">針對本週 {selectedPeerDate} 準時提交作業的同學</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="text-4xl text-indigo-600">{stats.numerator}</span>
+                                                        <span className="text-slate-300 mx-1">/</span>
+                                                        <span className="text-xl text-slate-400">{stats.denominator}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full blue-gradient progress-bar" style={{ width: `${percent}%` }}></div>
+                                                </div>
+                                                {percent === 100 && stats.denominator > 0 ? (
+                                                    <div className="mt-4 text-emerald-500 flex items-center gap-2 animate-bounce italic">妳太棒了！本週評價已全數完成！🚀</div>
+                                                ) : percent >= 80 ? (
+                                                    <div className="mt-4 text-indigo-500 italic">妳很棒，快完成了！加油！✨</div>
+                                                ) : stats.remainingNames.length > 0 ? (
+                                                    <div className="mt-4 flex flex-wrap gap-2 items-center">
+                                                        <span className="text-xs text-slate-400">待評價同學：</span>
+                                                        {stats.remainingNames.map(n => <span key={n} className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] border border-amber-100">@{n}</span>)}
+                                                    </div>
+                                                ) : <div className="mt-4 text-slate-300 text-xs">本週目前暫無其他準時上傳的作品喔</div>}
+                                            </div>
+                                            <div className="shrink-0">
+                                                 <select value={selectedPeerDate} onChange={(e)=>setSelectedPeerDate(e.target.value)} className="bg-slate-50 p-4 rounded-2xl shadow-inner outline-none border border-slate-100 text-indigo-600">
+                                                    {SEMESTER_WEEKS.map(w => <option key={w.date} value={w.date}>{w.date}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {assignments.filter(a => a.weekDate === selectedPeerDate && a.studentClass === identity.class).map(a => {
+                                        const isSelf = a.studentName === identity.name;
+                                        const hasDone = comments.some(c => c.assignmentId === a.id && c.author === identity.name);
+                                        return (
+                                            <div key={a.id} className={`bg-white rounded-[40px] p-6 card-shadow flex flex-col h-[480px] border-2 transition ${isSelf ? 'border-indigo-500 ring-8 ring-indigo-50' : hasDone ? 'border-emerald-100' : 'border-transparent'}`}>
+                                                <div className="flex justify-between items-start mb-6 shrink-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="text-slate-800 text-lg">{a.studentName}</div>
+                                                        {hasDone && !isSelf && <span className="text-emerald-500 text-xs">✓ 已評</span>}
+                                                    </div>
+                                                    <a href={a.url} target="_blank" className="px-5 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-xs flex items-center gap-1 hover:bg-indigo-600 hover:text-white transition">觀看 <Icon name="external-link" size={12} /></a>
+                                                </div>
+                                                <div className="flex-1 overflow-y-auto space-y-3 mb-4 scrollbar-hide">
+                                                    {comments.filter(c => c.assignmentId === a.id).map(c => {
+                                                        const fbStatus = getFBStatus(selectedPeerDate, identity.class, c.createdAt);
+                                                        return (
+                                                            <div key={c.id} className={`p-3 rounded-2xl text-[10px] border border-slate-100 group relative ${c.author === a.studentName ? 'bg-indigo-50' : 'bg-slate-50'}`}>
+                                                                <div className="text-indigo-600 mb-1 flex justify-between items-center">
+                                                                    <span>{c.author} {c.author === a.studentName && <span className="opacity-60 italic">(創作理念/目的)</span>}</span>
+                                                                    <span className={`text-[7px] px-1 rounded-sm font-black ${fbStatus==='準時'?'bg-emerald-100 text-emerald-600':'bg-amber-100 text-amber-600'}`}>{fbStatus}</span>
+                                                                </div>
+                                                                <div className="text-slate-700">{c.text}</div>
+                                                                {c.author === identity.name && <button onClick={async ()=> { if(confirm("刪除？")) await window.fb.deleteDoc(window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'comments', c.id)); }} className="opacity-0 group-hover:opacity-100 absolute right-2 top-2 text-slate-300 hover:text-rose-500 font-bold">×</button>}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="flex gap-2 p-1 bg-slate-50 rounded-2xl border">
+                                                    <input id={`cm-${a.id}`} className="flex-1 bg-transparent p-3 text-[10px] outline-none" placeholder="輸入回饋..." />
+                                                    <button onClick={async () => {
+                                                        const el = document.getElementById(`cm-${a.id}`);
+                                                        if(el.value) {
+                                                            await window.fb.addDoc(window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'comments'), { assignmentId: a.id, author: identity.name, text: el.value, createdAt: window.fb.serverTimestamp() });
+                                                            el.value = '';
+                                                        }
+                                                    }} className="bg-slate-800 text-white p-2 px-3 rounded-xl shadow-md"><Icon name="send" size={14} /></button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : currentView === 'personal' ? (
+                            <div className="max-w-4xl mx-auto space-y-6">
+                                <h2 className="text-xl text-slate-800 border-b-2 border-indigo-500 inline-block italic">Received Feedback</h2>
+                                {assignments.filter(a => a.studentName === identity.name).sort((a,b)=> (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(a => (
+                                    <div key={a.id} className="bg-white p-8 rounded-[40px] card-shadow border border-slate-100 mb-6">
+                                        <div className="text-indigo-600 italic mb-6 border-b border-slate-50 pb-4">Week {a.weekDate} 作品回饋</div>
+                                        <div className="space-y-4">
+                                            {comments.filter(c => c.assignmentId === a.id && c.author !== identity.name).map((c, idx) => (
+                                                <div key={idx} className="flex gap-4 items-start">
+                                                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600 text-xs font-black">{c.author[0]}</div>
+                                                    <div className="bg-slate-50 p-4 rounded-[24px] flex-1 border border-slate-100">
+                                                        <div className="text-[9px] text-indigo-400 mb-1">{c.author}</div>
+                                                        <div className="text-sm text-slate-700">{c.text}</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {comments.filter(c => c.assignmentId === a.id && c.author !== identity.name).length === 0 && <div className="text-center py-6 text-slate-200 text-xs italic">尚未收到回饋</div>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
                             <div className="space-y-8">
-                                {/* 班級切換按鈕 */}
                                 <div className="flex gap-4 p-2 bg-white rounded-3xl card-shadow inline-flex border border-slate-100">
                                     {["早班", "晚班"].map(c => (
-                                        <button key={c} onClick={()=>setOverviewClass(c)} className={`px-10 py-3 rounded-2xl transition ${overviewClass === c ? 'blue-gradient text-white shadow-lg' : 'text-slate-300 hover:text-indigo-500'}`}>{c}</button>
+                                        <button key={c} onClick={()=>setOverviewClass(c)} className={`px-10 py-3 rounded-2xl transition ${overviewClass === c ? 'blue-gradient text-white shadow-lg' : 'text-slate-300'}`}>{c}</button>
                                     ))}
                                 </div>
                                 <div className="bg-white rounded-[40px] card-shadow border border-slate-100 overflow-hidden overflow-x-auto">
-                                    <table className="min-w-[900px] text-center">
+                                    <table className="min-w-[900px] text-center border-collapse">
                                         <thead>
-                                            <tr className="bg-slate-50 border-b border-slate-100">
-                                                <th className="p-6 text-left text-xs text-indigo-400 sticky left-0 bg-white border-r">學員姓名</th>
-                                                {SEMESTER_WEEKS.map(w => <th key={w.date} className="p-4 text-[10px] text-slate-400">{w.date}<br/><span className="text-[8px] opacity-40">HW | FB</span></th>)}
+                                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-400">
+                                                <th className="p-6 text-left text-xs sticky left-0 bg-white border-r">學員姓名</th>
+                                                {SEMESTER_WEEKS.map(w => <th key={w.date} className="p-4 text-[10px]">{w.date}<br/><span className="text-[8px] opacity-40">HW | FB</span></th>)}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -238,148 +383,6 @@
                                         </tbody>
                                     </table>
                                 </div>
-                            </div>
-                        ) : currentView === 'upload' ? (
-                            <div className="max-w-4xl mx-auto space-y-6">
-                                <h2 className="text-xl text-slate-800 border-b-2 border-indigo-500 inline-block italic">Weekly Submission</h2>
-                                {SEMESTER_WEEKS.map((w, i) => (
-                                    <div key={i} className="bg-white p-8 rounded-[40px] card-shadow border border-slate-50 flex flex-col md:flex-row gap-6 items-center">
-                                        <div className="w-14 h-14 blue-gradient rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md italic">W{i+1}</div>
-                                        <div className="flex-1 w-full space-y-4">
-                                            <div className="text-[10px] text-slate-300 uppercase tracking-widest italic">{w.date} 20:00 截止</div>
-                                            {assignments.filter(a => a.weekDate === w.date && a.studentName === identity.name).map(a => {
-                                                const status = getHWStatus(a.weekDate, a.createdAt);
-                                                return (
-                                                    <div key={a.id} className="bg-slate-50 p-4 rounded-2xl flex justify-between items-center border border-slate-100">
-                                                        <div className="flex items-center gap-3 overflow-hidden">
-                                                            <a href={a.url} target="_blank" className="text-sm text-rose-500 underline truncate">{a.url}</a>
-                                                            <span className={`text-[9px] px-2 py-0.5 rounded-md ${status==='準時'?'bg-emerald-100 text-emerald-600':'bg-amber-100 text-amber-600'}`}>上傳狀態：{status}</span>
-                                                        </div>
-                                                        <button onClick={async ()=>{ if(confirm("刪除？")) await window.fb.deleteDoc(window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'assignments', a.id)); }} className="ml-4 text-slate-400 hover:text-red-500 text-xs">刪除</button>
-                                                    </div>
-                                                );
-                                            })}
-                                            <div className="flex gap-3">
-                                                <input id={`in-${w.date}`} className="flex-1 bg-slate-50 border-b-2 border-slate-100 outline-none p-3 text-sm focus:border-rose-400 transition" placeholder="輸入連結..." />
-                                                <button onClick={async () => {
-                                                    const el = document.getElementById(`in-${w.date}`);
-                                                    if(el.value) {
-                                                        await window.fb.addDoc(window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'assignments'), { studentName: identity.name, studentClass: identity.class, weekDate: w.date, url: el.value, createdAt: window.fb.serverTimestamp() });
-                                                        el.value = '';
-                                                    }
-                                                }} className="blue-gradient text-white px-8 py-3 rounded-2xl shadow-lg">提交</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : currentView === 'peer' ? (
-                            <div className="max-w-6xl mx-auto space-y-6">
-                                {/* 評價進度儀表板 */}
-                                {(() => {
-                                    const stats = getPeerStats(selectedPeerDate, identity.name, identity.class);
-                                    const percent = stats.denominator > 0 ? (stats.numerator / stats.denominator) * 100 : 0;
-                                    return (
-                                        <div className="bg-white p-8 rounded-[40px] card-shadow border-l-8 border-indigo-600 flex flex-col md:flex-row gap-8 items-center justify-between">
-                                            <div className="flex-1 w-full">
-                                                <div className="flex justify-between items-end mb-2">
-                                                    <div>
-                                                        <h3 className="text-2xl text-slate-800 italic">評價進度儀表板</h3>
-                                                        <p className="text-slate-400 text-xs font-black">針對本週 {selectedPeerDate} 準時提交作業的同學</p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <span className="text-4xl text-indigo-600">{stats.numerator}</span>
-                                                        <span className="text-slate-300 mx-1">/</span>
-                                                        <span className="text-xl text-slate-400">{stats.denominator}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
-                                                    <div className="h-full blue-gradient progress-bar" style={{ width: `${percent}%` }}></div>
-                                                </div>
-                                                {percent === 100 && stats.denominator > 0 ? (
-                                                    <div className="mt-4 text-emerald-500 flex items-center gap-2 animate-bounce">
-                                                        你太棒了！本週評價已全數完成！🚀
-                                                    </div>
-                                                ) : percent >= 80 ? (
-                                                    <div className="mt-4 text-indigo-500">你很棒，快完成了！加油！✨</div>
-                                                ) : stats.remainingNames.length > 0 ? (
-                                                    <div className="mt-4 flex flex-wrap gap-2 items-center">
-                                                        <span className="text-xs text-slate-400">待評價同學：</span>
-                                                        {stats.remainingNames.map(n => <span key={n} className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] border border-amber-100">@{n}</span>)}
-                                                    </div>
-                                                ) : null}
-                                            </div>
-                                            <div className="shrink-0">
-                                                 <select value={selectedPeerDate} onChange={(e)=>setSelectedPeerDate(e.target.value)} className="bg-slate-50 p-4 rounded-2xl shadow-inner outline-none border border-slate-100 text-indigo-600 font-black">
-                                                    {SEMESTER_WEEKS.map(w => <option key={w.date} value={w.date}>{w.date}</option>)}
-                                                </select>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {assignments.filter(a => a.weekDate === selectedPeerDate && a.studentClass === identity.class).map(a => {
-                                        const isSelf = a.studentName === identity.name;
-                                        const hasDone = comments.some(c => c.assignmentId === a.id && c.author === identity.name);
-                                        return (
-                                            <div key={a.id} className={`bg-white rounded-[40px] p-6 card-shadow flex flex-col h-[480px] border-2 transition ${isSelf ? 'border-indigo-500 ring-8 ring-indigo-50' : hasDone ? 'border-emerald-100' : 'border-transparent'}`}>
-                                                <div className="flex justify-between items-start mb-6 shrink-0 text-left">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="text-slate-800 text-lg">{a.studentName}</div>
-                                                        {hasDone && !isSelf && <span className="text-emerald-500 font-black text-xs">✓ 已評</span>}
-                                                    </div>
-                                                    <a href={a.url} target="_blank" className="px-5 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-xs flex items-center gap-1 hover:bg-indigo-600 hover:text-white transition shadow-sm">觀看 <Icon name="external-link" size={12} /></a>
-                                                </div>
-                                                <div className="flex-1 overflow-y-auto space-y-3 mb-4 scrollbar-hide">
-                                                    {comments.filter(c => c.assignmentId === a.id).map(c => {
-                                                        const fbStatus = getFBStatus(selectedPeerDate, identity.class, c.createdAt);
-                                                        return (
-                                                            <div key={c.id} className={`p-3 rounded-2xl text-[10px] border border-slate-100 group relative ${c.author === a.studentName ? 'bg-indigo-50' : 'bg-slate-50'}`}>
-                                                                <div className="text-indigo-600 mb-1 flex justify-between items-center">
-                                                                    <span>{c.author} {c.author === a.studentName && <span className="text-indigo-300 opacity-80 ml-1">(創作理念/目的)</span>}</span>
-                                                                    <span className={`text-[7px] px-1 rounded-sm font-black ${fbStatus==='準時'?'bg-emerald-100 text-emerald-600':'bg-amber-100 text-amber-600'}`}>{fbStatus}</span>
-                                                                </div>
-                                                                <div className="text-slate-600 font-bold">{c.text}</div>
-                                                                {c.author === identity.name && <button onClick={async ()=> { if(confirm("刪除？")) await window.fb.deleteDoc(window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'comments', c.id)); }} className="opacity-0 group-hover:opacity-100 absolute right-2 top-2 text-slate-300 hover:text-red-500 font-bold">×</button>}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                                <div className="flex gap-2 p-1 bg-slate-50 rounded-2xl border">
-                                                    <input id={`cm-${a.id}`} className="flex-1 bg-transparent p-3 text-[10px] outline-none" placeholder="輸入回饋..." />
-                                                    <button onClick={async () => {
-                                                        const el = document.getElementById(`cm-${a.id}`);
-                                                        if(el.value) {
-                                                            await window.fb.addDoc(window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'comments'), { assignmentId: a.id, author: identity.name, text: el.value, createdAt: window.fb.serverTimestamp() });
-                                                            el.value = '';
-                                                        }
-                                                    }} className="bg-slate-800 text-white p-2 px-3 rounded-xl shadow-md"><Icon name="send" size={14} /></button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="max-w-4xl mx-auto space-y-6">
-                                <h2 className="text-xl text-slate-800 border-b-2 border-indigo-500 inline-block italic">Received Feedback</h2>
-                                {assignments.filter(a => a.studentName === identity.name).sort((a,b)=> (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(a => (
-                                    <div key={a.id} className="bg-white p-8 rounded-[40px] card-shadow border border-slate-100 mb-6">
-                                        <div className="text-indigo-600 italic mb-6 border-b border-slate-50 pb-4">Week {a.weekDate} 作品回饋</div>
-                                        <div className="space-y-4 text-left">
-                                            {comments.filter(c => c.assignmentId === a.id && c.author !== identity.name).map((c, idx) => (
-                                                <div key={idx} className="flex gap-4 items-start">
-                                                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600 text-xs font-black">{c.author[0]}</div>
-                                                    <div className="bg-slate-50 p-4 rounded-[24px] flex-1 border border-slate-100">
-                                                        <div className="text-[9px] text-indigo-400 mb-1">{c.author}</div>
-                                                        <div className="text-sm text-slate-600">{c.text}</div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {comments.filter(c => c.assignmentId === a.id && c.author !== identity.name).length === 0 && <div className="text-center py-6 text-slate-200 text-xs italic">尚未收到回饋</div>}
-                                        </div>
-                                    </div>
-                                ))}
                             </div>
                         )}
                     </main>
