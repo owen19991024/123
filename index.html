@@ -16,6 +16,7 @@
         .blue-gradient { background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%); }
         .card-shadow { box-shadow: 0 10px 30px -5px rgba(59, 130, 246, 0.1); }
         #loading-overlay { position: fixed; inset: 0; background: white; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .progress-bar { transition: width 0.5s ease-out; }
     </style>
 </head>
 <body>
@@ -132,7 +133,11 @@
                 const completed = timelyTargets.filter(a =>
                     comments.some(c => c.assignmentId === a.id && c.author === userName)
                 );
-                return { numerator: completed.length, denominator: timelyTargets.length };
+                return { 
+                    numerator: completed.length, 
+                    denominator: timelyTargets.length,
+                    remainingNames: timelyTargets.filter(a => !comments.some(c => c.assignmentId === a.id && c.author === userName)).map(a => a.studentName)
+                };
             };
 
             if (!ready) return null;
@@ -231,19 +236,64 @@
                             </div>
                         ) : currentView === 'peer' ? (
                             <div className="max-w-6xl mx-auto space-y-6">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-2xl font-black text-slate-800 italic">Peer Feedback</h2>
-                                    <select value={selectedPeerDate} onChange={(e)=>setSelectedPeerDate(e.target.value)} className="bg-white p-3 rounded-2xl shadow-sm outline-none border border-slate-100">
-                                        {SEMESTER_WEEKS.map(w => <option key={w.date} value={w.date}>{w.date}</option>)}
-                                    </select>
-                                </div>
+                                {/* 評價統計儀表板 Dashboard */}
+                                {(() => {
+                                    const stats = getPeerStats(selectedPeerDate, identity.name, identity.class);
+                                    const percent = stats.denominator > 0 ? (stats.numerator / stats.denominator) * 100 : 0;
+                                    return (
+                                        <div className="bg-white p-8 rounded-[40px] card-shadow border-l-8 border-indigo-600 flex flex-col md:flex-row gap-8 items-center justify-between">
+                                            <div className="flex-1 w-full">
+                                                <div className="flex justify-between items-end mb-2">
+                                                    <div>
+                                                        <h3 className="text-2xl text-slate-800 italic">評價進度儀表板</h3>
+                                                        <p className="text-slate-400 text-xs font-black">針對本週 {selectedPeerDate} 準時提交作業的同學</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="text-4xl text-indigo-600">{stats.numerator}</span>
+                                                        <span className="text-slate-300 mx-1">/</span>
+                                                        <span className="text-xl text-slate-400">{stats.denominator}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full blue-gradient progress-bar" style={{ width: `${percent}%` }}></div>
+                                                </div>
+                                                {percent === 100 ? (
+                                                    <div className="mt-4 text-emerald-500 flex items-center gap-2 animate-bounce">
+                                                        <Icon name="party-popper" /> 你太棒了！本週評價已全數完成！
+                                                    </div>
+                                                ) : percent >= 80 ? (
+                                                    <div className="mt-4 text-indigo-500 flex items-center gap-2">
+                                                        <Icon name="zap" /> 你很棒，快完成了！加油！
+                                                    </div>
+                                                ) : stats.remainingNames.length > 0 ? (
+                                                    <div className="mt-4 flex flex-wrap gap-2 items-center">
+                                                        <span className="text-xs text-slate-400">待評價同學：</span>
+                                                        {stats.remainingNames.map(n => (
+                                                            <span key={n} className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] border border-amber-100">@{n}</span>
+                                                        ))}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                            <div className="shrink-0">
+                                                 <select value={selectedPeerDate} onChange={(e)=>setSelectedPeerDate(e.target.value)} className="bg-slate-50 p-4 rounded-2xl shadow-inner outline-none border border-slate-100 text-indigo-600 font-black">
+                                                    {SEMESTER_WEEKS.map(w => <option key={w.date} value={w.date}>週次：{w.date}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {assignments.filter(a => a.weekDate === selectedPeerDate && a.studentClass === identity.class).map(a => {
                                         const isSelf = a.studentName === identity.name;
+                                        const hasCommented = comments.some(c => c.assignmentId === a.id && c.author === identity.name);
                                         return (
-                                            <div key={a.id} className={`bg-white rounded-[40px] p-6 card-shadow flex flex-col h-[480px] border-2 transition ${isSelf ? 'border-indigo-500 ring-8 ring-indigo-50' : 'border-transparent'}`}>
+                                            <div key={a.id} className={`bg-white rounded-[40px] p-6 card-shadow flex flex-col h-[480px] border-2 transition ${isSelf ? 'border-indigo-500 ring-8 ring-indigo-50' : hasCommented ? 'border-emerald-100' : 'border-transparent'}`}>
                                                 <div className="flex justify-between items-start mb-6 shrink-0 text-left">
-                                                    <div className="text-slate-800 text-lg">{a.studentName}</div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="text-slate-800 text-lg">{a.studentName}</div>
+                                                        {hasCommented && !isSelf && <span className="text-emerald-500"><Icon name="check-circle-2" size={16}/></span>}
+                                                    </div>
                                                     <a href={a.url} target="_blank" className="px-5 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-xs flex items-center gap-1 hover:bg-indigo-600 hover:text-white transition shadow-sm">觀看 <Icon name="external-link" size={12} /></a>
                                                 </div>
                                                 <div className="flex-1 overflow-y-auto space-y-3 mb-4 scrollbar-hide">
