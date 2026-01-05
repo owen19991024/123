@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Q1自媒體陪跑班 - 學員系統 PRO</title>
+    <title>Q1自媒體陪跑班 - 學員系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -11,20 +11,18 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #fff5f7; color: #5c3d46; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .toast-enter { animation: slideIn 0.3s ease-out forwards; }
-        @keyframes slideIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .dark-mode { background-color: #0f172a; color: #f8fafc; }
-        .dark-card { background-color: #1e293b; border-color: #334155; }
+        .pink-gradient { background: linear-gradient(135deg, #ffafbd 0%, #ffc3a0 100%); }
+        .card-shadow { box-shadow: 0 10px 25px -5px rgba(255, 182, 193, 0.3); }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-700 text-left">
+<body>
     <div id="root"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, doc, onSnapshot, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, onSnapshot, addDoc, setDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
@@ -40,7 +38,7 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        window.firebaseEnv = { auth, db, appId: 'class-assignment-portal-v2', signInAnonymously, onAuthStateChanged, collection, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc };
+        window.firebaseEnv = { auth, db, appId: 'class-assignment-portal-v2', signInAnonymously, onAuthStateChanged, collection, onSnapshot, addDoc, setDoc, serverTimestamp, deleteDoc, doc };
     </script>
 
     <script type="text/babel">
@@ -56,15 +54,15 @@
         ];
         
         const Icon = ({ name, size = 20, className = "" }) => { 
-            useEffect(() => { lucide.createIcons(); }, [name]); 
+            useEffect(() => { lucide.createIcons(); }, [name, size]); 
             return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>; 
         };
 
         const Toast = ({ message, type, onClose }) => {
             useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, []);
             return (
-                <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-white font-black toast-enter ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-                    <Icon name={type === 'success' ? 'check-circle' : 'alert-circle'} size={20} />
+                <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-white font-black toast-enter ${type === 'success' ? 'bg-rose-400' : 'bg-red-400'}`}>
+                    <Icon name={type === 'success' ? 'heart' : 'alert-circle'} size={20} />
                     <span>{message}</span>
                 </div>
             );
@@ -73,12 +71,14 @@
         function App() {
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
-            const [uploading, setUploading] = useState(null);
             const [toast, setToast] = useState(null);
-            const [darkMode, setDarkMode] = useState(localStorage.getItem('theme') === 'dark');
             const [identity, setIdentity] = useState(JSON.parse(localStorage.getItem('portal_identity')));
             const [selectedClass, setSelectedClass] = useState(""); 
             const [currentView, setCurrentView] = useState('upload');
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [announcement, setAnnouncement] = useState("載入公告中...");
+            const [isEditingAnnounce, setIsEditingAnnounce] = useState(false);
+            
             const [assignments, setAssignments] = useState([]);
             const [comments, setComments] = useState([]);
 
@@ -90,24 +90,21 @@
                     setLoading(false);
                     if (u) {
                         env.onSnapshot(env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'assignments'), (s) => setAssignments(s.docs.map(d => ({id:d.id, ...d.data()}))));
-                        env.onSnapshot(env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'comments'), (s) => {
-                            const data = s.docs.map(d => ({id:d.id, ...d.data()}));
-                            setComments(data.sort((a,b) => (a.createdAt?.seconds||0)-(b.createdAt?.seconds||0)));
+                        env.onSnapshot(env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'comments'), (s) => setComments(s.docs.map(d => ({id:d.id, ...d.data()}))));
+                        env.onSnapshot(env.doc(env.db, 'artifacts', env.appId, 'public', 'announcement'), (doc) => {
+                            if(doc.exists()) setAnnouncement(doc.data().text);
+                            else setAnnouncement("歡迎來到 Q1 陪跑班，點擊編輯更新公告 ✨");
                         });
                     }
                 });
             }, []);
 
-            // 深色模式切換
-            useEffect(() => {
-                if (darkMode) {
-                    document.body.classList.add('dark-mode');
-                    localStorage.setItem('theme', 'dark');
-                } else {
-                    document.body.classList.remove('dark-mode');
-                    localStorage.setItem('theme', 'light');
-                }
-            }, [darkMode]);
+            const saveAnnouncement = async () => {
+                const env = window.firebaseEnv;
+                await env.setDoc(env.doc(env.db, 'artifacts', env.appId, 'public', 'announcement'), { text: announcement });
+                setIsEditingAnnounce(false);
+                setToast({ message: "公告已更新", type: "success" });
+            };
 
             const isAssignmentLate = (dateStr) => {
                 const submitDate = new Date();
@@ -116,46 +113,12 @@
                 return submitDate > deadline;
             };
 
-            const getCommentDeadline = (dateStr, cls) => {
-                const weekInfo = SEMESTER_WEEKS.find(w => w.date === dateStr);
-                if (!weekInfo) return null;
-                const [m, d] = weekInfo.deadlineWeek.split('/').map(Number);
-                const hour = cls === '早班' ? 5 : 21;
-                const min = cls === '早班' ? 0 : 30;
-                return new Date(new Date().getFullYear(), m - 1, d + 1, hour, min, 0);
-            };
-
-            const deleteItem = async (type, id) => {
-                if(!confirm("確定要刪除嗎？")) return;
-                try {
-                    const env = window.firebaseEnv;
-                    await env.deleteDoc(env.doc(env.db, 'artifacts', env.appId, 'public', 'data', type, id));
-                    setToast({ message: "已刪除", type: "success" });
-                } catch (e) { setToast({ message: "刪除失敗", type: "error" }); }
-            };
-
-            const handleUpload = async (date) => {
-                const el = document.getElementById(`in-${date}`);
-                if(!el.value) return;
-                setUploading(date);
-                try {
-                    const env = window.firebaseEnv;
-                    await env.addDoc(env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'assignments'), { 
-                        studentName: identity.name, studentClass: identity.class, weekDate: date, url: el.value, 
-                        submittedAt: env.serverTimestamp(), isLate: isAssignmentLate(date)
-                    });
-                    el.value = '';
-                    setToast({ message: "上傳成功！", type: "success" });
-                } catch (e) { setToast({ message: "上傳失敗", type: "error" }); } finally { setUploading(null); }
-            };
-
-            // 個人儀表板數據計算
             const personalStats = useMemo(() => {
                 if (!identity) return { submitted: 0, receivedComments: 0 };
-                const submitted = assignments.filter(a => a.studentName === identity.name).length;
-                const myAssignIds = assignments.filter(a => a.studentName === identity.name).map(a => a.id);
-                const receivedComments = comments.filter(c => myAssignIds.includes(c.assignmentId) && c.author !== identity.name).length;
-                return { submitted, receivedComments };
+                const sub = assignments.filter(a => a.studentName === identity.name).length;
+                const myIds = assignments.filter(a => a.studentName === identity.name).map(a => a.id);
+                const rec = comments.filter(c => myIds.includes(c.assignmentId) && c.author !== identity.name).length;
+                return { submitted: sub, receivedComments: rec };
             }, [assignments, comments, identity]);
 
             const studentProgressData = useMemo(() => {
@@ -164,48 +127,51 @@
                     const weeklySummary = SEMESTER_WEEKS.map(w => {
                         const date = w.date;
                         const myAssigns = assignments.filter(a => a.studentName === name && a.weekDate === date);
-                        let assignStatus = '未交';
+                        let assignStatus = '未完成';
                         if (myAssigns.length > 0) assignStatus = myAssigns.some(a => a.isLate) ? '遲交' : '準時';
+                        
                         const othersOnTime = assignments.filter(a => a.weekDate === date && a.studentName !== name && a.studentClass === cls && !a.isLate);
                         const targetAssignIds = othersOnTime.map(a => a.id);
                         const targetCount = targetAssignIds.length;
-                        const commentedCount = new Set(comments.filter(c => c.author === name && targetAssignIds.includes(c.assignmentId) && !c.isSelfComment).map(c => c.assignmentId)).size;
-                        let commentStatus = '未完';
+                        const myCommentsInWeek = comments.filter(c => c.author === name && targetAssignIds.includes(c.assignmentId));
+                        const commentedCount = new Set(myCommentsInWeek.map(c => c.assignmentId)).size;
+                        
+                        let commentStatus = '未完成';
                         if (targetCount === 0) commentStatus = '免評';
-                        else if (commentedCount === targetCount) {
-                            const myComments = comments.filter(c => c.author === name && targetAssignIds.includes(c.assignmentId) && !c.isSelfComment);
-                            commentStatus = myComments.some(c => c.isLate) ? '遲評' : '準時';
+                        else if (commentedCount >= targetCount) {
+                             // 這裡簡單判定，若有一則留言是遲評則算遲評
+                             commentStatus = myCommentsInWeek.some(c => c.isLate) ? '遲評' : '準時';
                         }
-                        return { date, assignStatus, commentStatus, count: `${commentedCount}/${targetCount}` };
+                        return { date, assignStatus, commentStatus };
                     });
                     return { name, weeklySummary };
                 });
             }, [assignments, comments, identity]);
 
-            if (loading) return <div className="h-screen flex items-center justify-center font-bold text-indigo-600">連線中...</div>;
+            if (loading) return <div className="h-screen flex items-center justify-center font-bold text-rose-400 italic text-2xl">Loading... ✨</div>;
 
             if (!identity) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-                        <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md border-t-8 border-indigo-600 text-left">
-                            <h1 className="text-3xl font-black text-indigo-600 mb-6 text-center">Q1自媒體陪跑班</h1>
+                    <div className="min-h-screen flex items-center justify-center p-4">
+                        <div className="bg-white p-10 rounded-[40px] card-shadow w-full max-w-md border-t-8 border-rose-300">
+                            <h1 className="text-3xl font-black text-rose-400 mb-6 text-center italic font-sans tracking-tight">Q1 Classroom ✨</h1>
                             <div className="grid grid-cols-2 gap-2 mb-6">
                                 {Object.keys(STUDENT_LIST).map(c => (
-                                    <button key={c} onClick={() => setSelectedClass(c)} className={`p-3 border-2 rounded-xl font-bold transition ${selectedClass === c ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg' : 'border-slate-100 text-slate-400'}`}>{c}</button>
+                                    <button key={c} onClick={() => setSelectedClass(c)} className={`p-3 border-2 rounded-2xl font-black transition ${selectedClass === c ? 'border-rose-300 bg-rose-300 text-white shadow-md' : 'border-rose-50 text-rose-300 hover:bg-rose-50'}`}>{c}</button>
                                 ))}
                             </div>
-                            <select id="s-select" className="w-full p-4 border-2 border-slate-100 rounded-2xl mb-8 font-bold outline-none bg-slate-50 text-sm" disabled={!selectedClass}>
-                                <option value="">{selectedClass ? "點選您的姓名" : "請先選擇班級"}</option>
+                            <select id="s-select" className="w-full p-4 border-2 border-rose-50 rounded-2xl mb-8 font-black outline-none bg-rose-50/50 text-rose-400" disabled={!selectedClass}>
+                                <option value="">{selectedClass ? "選取妳的姓名" : "請先選取班級"}</option>
                                 {selectedClass && STUDENT_LIST[selectedClass].map(n => <option key={n} value={n}>{n}</option>)}
                             </select>
                             <button onClick={() => {
                                 const n = document.getElementById('s-select').value;
-                                if(n && selectedClass) {
+                                if(n) {
                                     const d = {name: n, class: selectedClass};
                                     setIdentity(d);
                                     localStorage.setItem('portal_identity', JSON.stringify(d));
                                 }
-                            }} className="w-full bg-indigo-600 text-white p-4 rounded-2xl font-bold shadow-lg">進入教室系統</button>
+                            }} className="w-full pink-gradient text-white p-4 rounded-2xl font-black shadow-lg hover:scale-[1.02] transition">開始陪跑</button>
                         </div>
                     </div>
                 );
@@ -214,118 +180,167 @@
             return (
                 <div className="min-h-screen flex flex-col lg:flex-row">
                     {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-                    <nav className={`w-full lg:w-64 border-r p-6 flex flex-col shadow-sm text-left ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                        <div className={`flex items-center gap-3 mb-10 p-3 rounded-2xl ${darkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                            <div className="bg-indigo-600 p-2 rounded-lg text-white"><Icon name="user" /></div>
-                            <div className="font-black text-sm">{identity.name}<br/><span className="text-[10px] text-indigo-500 uppercase">{identity.class}</span></div>
-                        </div>
-                        <div className="space-y-2 flex-1 font-bold">
-                            <button onClick={()=>setCurrentView('upload')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${currentView==='upload'?'bg-indigo-600 text-white shadow-md':'text-slate-400'}`}><Icon name="cloud-upload" />作業上傳</button>
-                            <button onClick={()=>setCurrentView('peer')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${currentView==='peer'?'bg-indigo-600 text-white shadow-md':'text-slate-400'}`}><Icon name="message-square" />同儕互評</button>
-                            <button onClick={()=>setCurrentView('overview')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${currentView==='overview'?'bg-indigo-600 text-white shadow-md':'text-slate-400'}`}><Icon name="bar-chart-3" />進度總覽</button>
-                        </div>
-                        <div className="pt-4 space-y-2 border-t border-slate-700/50 mt-4">
-                            <button onClick={()=>setDarkMode(!darkMode)} className="w-full flex items-center gap-3 p-3 text-slate-400 hover:text-indigo-400 transition font-bold">
-                                <Icon name={darkMode ? 'sun' : 'moon'} /> <span>{darkMode ? '淺色模式' : '深色模式'}</span>
-                            </button>
-                            <button onClick={()=>{localStorage.clear(); location.reload();}} className="w-full flex items-center gap-3 p-3 text-slate-400 font-bold hover:text-red-500 transition"><Icon name="log-out" />登出系統</button>
-                        </div>
-                    </nav>
-
-                    <main className="flex-1 p-6 lg:p-10 overflow-y-auto">
-                        {/* 系統公告欄 */}
-                        <div className={`max-w-4xl mx-auto mb-8 p-4 rounded-2xl border-l-8 flex items-center gap-4 shadow-sm ${darkMode ? 'bg-indigo-900/20 border-indigo-500 text-indigo-100' : 'bg-indigo-50 border-indigo-600 text-indigo-900'}`}>
-                            <Icon name="megaphone" className="shrink-0" />
-                            <div className="text-sm font-bold">
-                                <span className="opacity-70">最新公告：</span> 歡迎來到 Q1 班！請記得每週日 20:00 前完成作業上傳，並於隔週二前完成同儕回饋唷！
+                    
+                    <nav className="w-full lg:w-72 bg-white p-8 flex flex-col border-r border-rose-100 shrink-0">
+                        <div className="pink-gradient p-5 rounded-[30px] text-white shadow-lg mb-10 flex items-center gap-4">
+                            <div className="bg-white/20 p-2 rounded-xl"><Icon name="smile" /></div>
+                            <div>
+                                <div className="font-black text-lg leading-tight">{identity.name}</div>
+                                <div className="text-[10px] opacity-80 uppercase tracking-widest font-black">{identity.class}</div>
                             </div>
                         </div>
 
-                        {currentView === 'upload' ? (
-                            <div className="max-w-4xl mx-auto space-y-6 text-left">
-                                {/* 個人進度儀表板 */}
-                                <div className="grid grid-cols-2 gap-4 mb-10">
-                                    <div className={`p-6 rounded-[32px] shadow-sm flex flex-col ${darkMode ? 'bg-slate-800' : 'bg-white border border-slate-100'}`}>
-                                        <span className="text-xs font-black opacity-40 uppercase tracking-widest mb-1">已繳交作業</span>
-                                        <span className="text-4xl font-black text-indigo-500">{personalStats.submitted} <span className="text-sm opacity-30">/ {SEMESTER_WEEKS.length}</span></span>
+                        <div className="space-y-3 flex-1">
+                            <button onClick={()=>setCurrentView('upload')} className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black transition ${currentView==='upload'?'bg-rose-50 text-rose-500 shadow-sm':'text-rose-200 hover:text-rose-300'}`}><Icon name="star" />作業上傳</button>
+                            <button onClick={()=>setCurrentView('peer')} className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black transition ${currentView==='peer'?'bg-rose-50 text-rose-500 shadow-sm':'text-rose-200 hover:text-rose-300'}`}><Icon name="heart" />同儕互評</button>
+                            <button onClick={()=>setCurrentView('overview')} className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black transition ${currentView==='overview'?'bg-rose-50 text-rose-500 shadow-sm':'text-rose-200 hover:text-rose-300'}`}><Icon name="layout" />全體進度</button>
+                        </div>
+
+                        <div className="mt-10 space-y-2 border-t border-rose-50 pt-6">
+                            <button onClick={() => {
+                                const pw = prompt("請輸入管理密碼:");
+                                if(pw === "q1admin") { setIsAdmin(true); setToast({message:"管理員模式已開啟", type:"success"}); }
+                            }} className="w-full text-left text-xs font-black text-rose-200 hover:text-rose-400 px-4">Admin Mode</button>
+                            <button onClick={()=>{localStorage.clear(); location.reload();}} className="w-full flex items-center gap-4 p-4 text-rose-200 font-black hover:text-rose-400 transition"><Icon name="log-out" />登出系統</button>
+                        </div>
+                    </nav>
+
+                    <main className="flex-1 p-6 lg:p-12 overflow-y-auto">
+                        {/* 公告欄 */}
+                        <div className="max-w-5xl mx-auto mb-10 bg-white rounded-[30px] p-6 card-shadow flex items-center gap-6 relative group">
+                            <div className="bg-rose-100 p-4 rounded-2xl text-rose-400 shadow-inner"><Icon name="megaphone" /></div>
+                            <div className="flex-1">
+                                {isEditingAnnounce ? (
+                                    <div className="flex gap-2">
+                                        <input value={announcement} onChange={(e)=>setAnnouncement(e.target.value)} className="flex-1 border-b-2 border-rose-200 outline-none p-1 font-black text-rose-500 bg-transparent" />
+                                        <button onClick={saveAnnouncement} className="bg-rose-400 text-white px-4 py-1 rounded-lg text-sm font-black shadow-md">儲存</button>
                                     </div>
-                                    <div className={`p-6 rounded-[32px] shadow-sm flex flex-col ${darkMode ? 'bg-slate-800' : 'bg-white border border-slate-100'}`}>
-                                        <span className="text-xs font-black opacity-40 uppercase tracking-widest mb-1">獲得同學回饋</span>
-                                        <span className="text-4xl font-black text-blue-500">{personalStats.receivedComments} <span className="text-sm opacity-30">次</span></span>
+                                ) : (
+                                    <p className="font-black text-rose-500 tracking-tight">{announcement}</p>
+                                )}
+                            </div>
+                            {isAdmin && !isEditingAnnounce && (
+                                <button onClick={()=>setIsEditingAnnounce(true)} className="absolute right-4 top-4 text-rose-200 hover:text-rose-400 transition"><Icon name="edit-3" size={16} /></button>
+                            )}
+                        </div>
+
+                        {currentView === 'upload' ? (
+                            <div className="max-w-5xl mx-auto">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                                    <div className="bg-white p-8 rounded-[40px] card-shadow flex justify-between items-center group hover:scale-[1.02] transition">
+                                        <div>
+                                            <div className="text-xs font-black text-rose-200 uppercase mb-1 tracking-widest">我的繳交進度</div>
+                                            <div className="text-4xl font-black text-rose-400">{personalStats.submitted} <span className="text-lg opacity-30">/ 12</span></div>
+                                            <div className="mt-2 text-xs text-rose-300 font-black">{personalStats.submitted > 5 ? "做得太棒了，繼續保持唷！✨" : "加油，妳可以的！🌸"}</div>
+                                        </div>
+                                        <Icon name="check-circle" size={48} className="text-rose-100 group-hover:text-rose-200 transition" />
+                                    </div>
+                                    <div className="bg-white p-8 rounded-[40px] card-shadow flex justify-between items-center group hover:scale-[1.02] transition">
+                                        <div>
+                                            <div className="text-xs font-black text-rose-200 uppercase mb-1 tracking-widest">收到的溫暖回饋</div>
+                                            <div className="text-4xl font-black text-rose-400">{personalStats.receivedComments} <span className="text-lg opacity-30">次</span></div>
+                                            <div className="mt-2 text-xs text-rose-300 font-black">大家都很欣賞妳的作品呢！</div>
+                                        </div>
+                                        <Icon name="message-circle" size={48} className="text-rose-100 group-hover:text-rose-200 transition" />
                                     </div>
                                 </div>
 
-                                <h2 className="text-2xl font-black mb-8">作業上傳區</h2>
+                                <h2 className="text-2xl font-black text-rose-400 mb-8 italic">Weekly Assignments</h2>
                                 {SEMESTER_WEEKS.map((w, i) => (
-                                    <div key={i} className={`p-6 rounded-[32px] flex flex-col md:flex-row gap-6 shadow-sm mb-4 transition ${darkMode ? 'bg-slate-800' : 'bg-white border border-slate-100'}`}>
-                                        <div className="w-14 h-14 bg-indigo-600/10 rounded-2xl flex items-center justify-center font-black text-indigo-500 text-lg shrink-0">W{i+1}</div>
-                                        <div className="flex-1">
-                                            <p className="opacity-40 text-xs font-bold mb-2 uppercase">{w.date}</p>
+                                    <div key={i} className="bg-white p-8 rounded-[40px] card-shadow mb-6 flex flex-col md:flex-row gap-8 items-center border-2 border-transparent hover:border-rose-100 transition group">
+                                        <div className="w-16 h-16 pink-gradient rounded-3xl flex items-center justify-center font-black text-white text-xl shadow-lg group-hover:rotate-3 transition">W{i+1}</div>
+                                        <div className="flex-1 w-full">
+                                            <div className="flex justify-between items-end mb-4">
+                                                <span className="text-xs font-black text-rose-200">{w.date} 截止任務</span>
+                                                {assignments.find(a=>a.weekDate===w.date && a.studentName===identity.name) && <span className="text-xs font-black text-emerald-500 flex items-center gap-1"><Icon name="check" size={12}/> 已上傳</span>}
+                                            </div>
                                             {assignments.filter(a => a.weekDate === w.date && a.studentName === identity.name).map(a => (
-                                                <div key={a.id} className={`text-xs p-2 rounded-lg mb-2 flex justify-between items-center ${darkMode ? 'bg-slate-700' : 'bg-slate-50 border border-slate-100'}`}>
-                                                    <span className="truncate flex-1 pr-4 text-indigo-400 underline font-bold">{a.url}</span>
-                                                    <button onClick={() => deleteItem('assignments', a.id)} className="text-slate-400 hover:text-red-500 px-2 font-bold text-lg">×</button>
+                                                <div key={a.id} className="bg-rose-50/50 p-3 rounded-2xl mb-3 flex justify-between items-center group/item border border-rose-100/50">
+                                                    <a href={a.url} target="_blank" className="text-xs font-black text-rose-400 underline truncate flex-1">{a.url}</a>
+                                                    <button onClick={async ()=>{
+                                                        if(confirm("確定要刪除這份作業嗎？")) {
+                                                            const env = window.firebaseEnv;
+                                                            await env.deleteDoc(env.doc(env.db, 'artifacts', env.appId, 'public', 'data', 'assignments', a.id));
+                                                            setToast({message:"已刪除", type:"success"});
+                                                        }
+                                                    }} className="ml-2 text-rose-200 hover:text-red-400 transition opacity-0 group-hover/item:opacity-100 font-black text-xs">刪除</button>
                                                 </div>
                                             ))}
-                                            <div className="flex gap-2 mt-4">
-                                                <input id={`in-${w.date}`} className={`flex-1 border-b outline-none p-2 text-sm bg-transparent transition ${darkMode ? 'border-slate-700 focus:border-indigo-500' : 'border-slate-100 focus:border-indigo-500'}`} placeholder="貼上 IG 作業連結..." />
-                                                <button onClick={() => handleUpload(w.date)} disabled={uploading === w.date} className={`px-6 py-2 rounded-xl text-sm font-bold shadow-md transition ${uploading === w.date ? 'bg-slate-700 text-slate-500' : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'}`}>
-                                                    {uploading === w.date ? '中...' : '上傳'}
-                                                </button>
+                                            <div className="flex gap-3">
+                                                <input id={`in-${w.date}`} className="flex-1 bg-rose-50/30 border-b-2 border-rose-100 outline-none p-3 text-sm focus:border-rose-300 transition font-black text-rose-500 placeholder-rose-200" placeholder="請貼上 IG 貼文連結..." />
+                                                <button onClick={async () => {
+                                                    const el = document.getElementById(`in-${w.date}`);
+                                                    if(!el.value) return;
+                                                    const env = window.firebaseEnv;
+                                                    await env.addDoc(env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'assignments'), { studentName: identity.name, studentClass: identity.class, weekDate: w.date, url: el.value, isLate: isAssignmentLate(w.date), createdAt: env.serverTimestamp() });
+                                                    el.value = ''; setToast({message:"上傳成功囉！", type:"success"});
+                                                }} className="pink-gradient text-white px-8 py-3 rounded-2xl font-black shadow-lg hover:scale-105 active:scale-95 transition">上傳</button>
                                             </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         ) : currentView === 'peer' ? (
-                            <div className="space-y-6 text-left">
-                                <h2 className="text-2xl font-black mb-8">同儕互評</h2>
+                            <div className="max-w-5xl mx-auto space-y-8">
+                                <h2 className="text-2xl font-black text-rose-400 italic">Peer Feedback</h2>
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                    {assignments.filter(a => a.studentClass === identity.class).map(a => (
-                                        <div key={a.id} className={`rounded-[40px] p-6 h-[480px] flex flex-col shadow-sm transition ${darkMode ? 'bg-slate-800' : 'bg-white border border-slate-100'} ${a.studentName === identity.name ? 'ring-2 ring-indigo-500 shadow-lg' : ''}`}>
-                                            <div className="flex justify-between items-center mb-4">
-                                                <span className="font-black truncate pr-2">{a.studentName} ({a.weekDate})</span>
-                                                <a href={a.url} target="_blank" className={`p-2 rounded-xl shrink-0 ${darkMode ? 'bg-slate-700 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}><Icon name="external-link" size={18} /></a>
+                                    {assignments.filter(a => a.studentClass === identity.class).sort((a,b)=> (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(a => (
+                                        <div key={a.id} className={`bg-white rounded-[40px] p-6 card-shadow flex flex-col h-[500px] border-2 transition ${a.studentName === identity.name ? 'border-rose-300 ring-4 ring-rose-50' : 'border-transparent'}`}>
+                                            <div className="flex justify-between items-center mb-6">
+                                                <div className="font-black text-rose-400 truncate">{a.studentName} <span className="text-[10px] opacity-40 ml-1 font-black">W-{a.weekDate}</span></div>
+                                                <a href={a.url} target="_blank" className="bg-rose-50 text-rose-400 p-3 rounded-2xl hover:bg-rose-100 transition shadow-sm"><Icon name="external-link" size={20} /></a>
                                             </div>
-                                            <div className="flex-1 overflow-y-auto space-y-2 mb-4 scrollbar-hide pr-1">
+                                            <div className="flex-1 overflow-y-auto space-y-3 mb-6 scrollbar-hide">
                                                 {comments.filter(c => c.assignmentId === a.id).map((c, idx) => (
-                                                    <div key={idx} className={`text-[11px] p-3 rounded-2xl flex justify-between items-start group transition ${darkMode ? 'bg-slate-700 border border-slate-600' : 'bg-slate-50 border border-slate-100'}`}>
-                                                        <span className="flex-1 leading-relaxed"><span className="font-black text-indigo-500">{c.author}: </span>{c.text}</span>
-                                                        {c.author === identity.name && <button onClick={() => deleteItem('comments', c.id)} className="text-slate-400 hover:text-red-500 ml-2 font-bold px-1 transition-opacity opacity-100 md:opacity-0 group-hover:opacity-100">×</button>}
+                                                    <div key={idx} className="bg-rose-50/50 p-4 rounded-2xl text-[11px] leading-relaxed relative group/msg border border-rose-100/30">
+                                                        <span className="font-black text-rose-400">{c.author}：</span>
+                                                        <span className="text-rose-900 font-black opacity-80">{c.text}</span>
+                                                        {c.author === identity.name && (
+                                                            <button onClick={async ()=>{
+                                                                if(confirm("刪除回饋？")) {
+                                                                    const env = window.firebaseEnv;
+                                                                    await env.deleteDoc(env.doc(env.db, 'artifacts', env.appId, 'public', 'data', 'comments', c.id));
+                                                                }
+                                                            }} className="absolute right-2 top-2 text-rose-200 hover:text-red-400 opacity-0 group-hover/msg:opacity-100 transition">×</button>
+                                                        )}
                                                     </div>
                                                 ))}
+                                                {comments.filter(c => c.assignmentId === a.id).length === 0 && <div className="text-center py-10 text-xs text-rose-200 italic font-black">還沒有人回饋，快來搶頭香！🌸</div>}
                                             </div>
-                                            <div className="flex gap-2 pt-2 border-t border-slate-700/30">
-                                                <input id={`cm-${a.id}`} className={`flex-1 text-xs p-3 rounded-xl outline-none shadow-sm transition ${darkMode ? 'bg-slate-900 border-slate-700 focus:border-indigo-500' : 'bg-white border-slate-100 focus:border-indigo-400'}`} placeholder="給同學一點回饋..." />
+                                            <div className="flex gap-2">
+                                                <input id={`cm-${a.id}`} className="flex-1 bg-rose-50/50 border border-rose-100 rounded-2xl p-3 text-xs outline-none focus:bg-white focus:border-rose-300 transition font-black text-rose-500" placeholder="寫下妳的鼓勵..." />
                                                 <button onClick={async () => {
                                                     const el = document.getElementById(`cm-${a.id}`);
                                                     if(!el.value) return;
-                                                    try {
-                                                        const env = window.firebaseEnv;
-                                                        const deadline = getCommentDeadline(a.weekDate, identity.class);
-                                                        await env.addDoc(env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'comments'), { assignmentId: a.id, author: identity.name, text: el.value, createdAt: env.serverTimestamp(), weekDate: a.weekDate, isLate: (new Date() > deadline) });
-                                                        el.value = ''; setToast({ message: "回饋已傳送", type: "success" });
-                                                    } catch (e) { setToast({ message: "傳送失敗", type: "error" }); }
-                                                }} className="bg-indigo-600 text-white p-3 rounded-xl shadow-md"><Icon name="send" size={16} /></button>
+                                                    const env = window.firebaseEnv;
+                                                    await env.addDoc(env.collection(env.db, 'artifacts', env.appId, 'public', 'data', 'comments'), { assignmentId: a.id, author: identity.name, text: el.value, createdAt: env.serverTimestamp(), isLate: isAssignmentLate(a.weekDate) });
+                                                    el.value = '';
+                                                }} className="bg-rose-400 text-white p-3 rounded-2xl shadow-md active:scale-95 transition"><Icon name="send" size={18} /></button>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         ) : (
-                            <div className={`p-8 rounded-[40px] shadow-sm overflow-x-auto text-left transition ${darkMode ? 'bg-slate-800' : 'bg-white border border-slate-100'}`}>
-                                <h2 className="text-2xl font-black mb-10">全體進度總覽</h2>
-                                <table className="w-full text-center min-w-[800px] border-collapse">
-                                    <thead><tr className="border-b border-slate-700/30"><th className="p-4 text-left text-xs opacity-40 font-black uppercase tracking-wider">學員姓名</th>{SEMESTER_WEEKS.map(w=><th key={w.date} className="p-4 text-[10px] font-black opacity-40">{w.date}</th>)}</tr></thead>
+                            <div className="bg-white p-10 rounded-[40px] card-shadow overflow-x-auto text-left">
+                                <h2 className="text-2xl font-black text-rose-400 mb-10 italic">Progress Wall</h2>
+                                <table className="w-full text-center min-w-[800px]">
+                                    <thead>
+                                        <tr className="border-b border-rose-50">
+                                            <th className="p-4 text-left text-[10px] text-rose-200 font-black uppercase tracking-widest">學員姓名</th>
+                                            {SEMESTER_WEEKS.map(w => <th key={w.date} className="p-4 text-[10px] font-black text-rose-200">{w.date}</th>)}
+                                        </tr>
+                                    </thead>
                                     <tbody>
                                         {studentProgressData.map(s => (
-                                            <tr key={s.name} className={`border-b border-slate-700/10 transition ${darkMode ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'}`}>
-                                                <td className="p-4 text-left font-black text-sm">{s.name}</td>
+                                            <tr key={s.name} className="border-b border-rose-50 hover:bg-rose-50/30 transition">
+                                                <td className="p-4 text-left font-black text-rose-500 text-sm">{s.name}</td>
                                                 {s.weeklySummary.map((sum, i) => (
                                                     <td key={i} className="p-4">
                                                         <div className="flex justify-center gap-1.5">
-                                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm text-white ${sum.assignStatus === '準時' ? 'bg-green-500' : sum.assignStatus === '遲交' ? 'bg-blue-500' : 'bg-red-400'}`}>交</div>
-                                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm text-white ${sum.commentStatus === '準時' ? 'bg-green-500' : sum.commentStatus === '遲評' ? 'bg-blue-500' : sum.commentStatus === '免評' ? 'bg-slate-100 !text-slate-400' : 'bg-red-400'}`}>評</div>
+                                                            {/* 紅綠燈配色邏輯 */}
+                                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm text-white transition-all ${sum.assignStatus === '準時' ? 'bg-emerald-500' : sum.assignStatus === '遲交' ? 'bg-amber-400' : 'bg-rose-500'}`}>交</div>
+                                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm text-white transition-all ${sum.commentStatus === '準時' ? 'bg-emerald-500' : sum.commentStatus === '遲評' ? 'bg-amber-400' : sum.commentStatus === '免評' ? 'bg-rose-50 text-rose-100 shadow-none' : 'bg-rose-500'}`}>評</div>
                                                         </div>
                                                     </td>
                                                 ))}
@@ -333,11 +348,11 @@
                                         ))}
                                     </tbody>
                                 </table>
-                                <div className="mt-10 pt-6 border-t border-slate-700/30 flex flex-wrap justify-center gap-x-8 gap-y-4">
-                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-green-500"></div><span className="text-xs font-bold opacity-60">準時</span></div>
-                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-blue-500"></div><span className="text-xs font-bold opacity-60">遲交 / 遲評</span></div>
-                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-red-400"></div><span className="text-xs font-bold opacity-60">未完成</span></div>
-                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-slate-700 border border-slate-600"></div><span className="text-xs font-bold opacity-60">無須執行</span></div>
+                                <div className="mt-12 pt-8 border-t border-rose-50 flex flex-wrap justify-center gap-x-10 gap-y-4">
+                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div><span className="text-xs font-black text-rose-300 uppercase tracking-tighter">準時 (Pass)</span></div>
+                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-400"></div><span className="text-xs font-black text-rose-300 uppercase tracking-tighter">遲交/遲評 (Warning)</span></div>
+                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-rose-500"></div><span className="text-xs font-black text-rose-300 uppercase tracking-tighter">未完成 (Missing)</span></div>
+                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-rose-50"></div><span className="text-xs font-black text-rose-300 uppercase tracking-tighter">免評 (N/A)</span></div>
                                 </div>
                             </div>
                         )}
